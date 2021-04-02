@@ -10,8 +10,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/pkg/errors"
+
+	"github.com/mattermost/mattermost-server/v5/model"
 )
 
 const permissionsExportBatchSize = 100
@@ -30,7 +31,7 @@ func (a *App) ResetPermissionsSystem() *model.AppError {
 
 	// Reset all Custom Role assignments to Users.
 	if err := a.Srv().Store.User().ClearAllCustomRoleAssignments(); err != nil {
-		return err
+		return model.NewAppError("ResetPermissionsSystem", "app.user.clear_all_custom_role_assignments.select.app_error", nil, err.Error(), http.StatusInternalServerError)
 	}
 
 	// Reset all Custom Role assignments to TeamMembers.
@@ -59,12 +60,12 @@ func (a *App) ResetPermissionsSystem() *model.AppError {
 	}
 
 	// Remove the "System" table entry that marks the emoji permissions migration as done.
-	if _, err := a.Srv().Store.System().PermanentDeleteByName(EMOJIS_PERMISSIONS_MIGRATION_KEY); err != nil {
+	if _, err := a.Srv().Store.System().PermanentDeleteByName(EmojisPermissionsMigrationKey); err != nil {
 		return model.NewAppError("ResetPermissionSystem", "app.system.permanent_delete_by_name.app_error", nil, err.Error(), http.StatusInternalServerError)
 	}
 
 	// Remove the "System" table entry that marks the guest roles permissions migration as done.
-	if _, err := a.Srv().Store.System().PermanentDeleteByName(GUEST_ROLES_CREATION_MIGRATION_KEY); err != nil {
+	if _, err := a.Srv().Store.System().PermanentDeleteByName(GuestRolesCreationMigrationKey); err != nil {
 		return model.NewAppError("ResetPermissionSystem", "app.system.permanent_delete_by_name.app_error", nil, err.Error(), http.StatusInternalServerError)
 	}
 
@@ -94,7 +95,7 @@ func (a *App) ExportPermissions(w io.Writer) error {
 
 			roles := []*model.Role{}
 			for _, roleName := range roleNames {
-				if len(roleName) == 0 {
+				if roleName == "" {
 					continue
 				}
 				role, err := a.GetRoleByName(roleName)
@@ -205,7 +206,7 @@ func (a *App) ImportPermissions(jsonl io.Reader) error {
 			{schemeCreated.DefaultChannelGuestRole, schemeIn.DefaultChannelGuestRole},
 		}
 		for _, roleNameTuple := range roleNameTuples {
-			if len(roleNameTuple[0]) == 0 || len(roleNameTuple[1]) == 0 {
+			if roleNameTuple[0] == "" || roleNameTuple[1] == "" {
 				continue
 			}
 

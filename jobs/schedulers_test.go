@@ -9,9 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/mattermost/mattermost-server/v5/einterfaces/mocks"
-	"github.com/mattermost/mattermost-server/v5/plugin/plugintest/mock"
-
 	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/plugin/plugintest/mock"
 	"github.com/mattermost/mattermost-server/v5/store/storetest"
 	"github.com/mattermost/mattermost-server/v5/utils/testutils"
 )
@@ -78,28 +77,40 @@ func TestScheduler(t *testing.T) {
 	exportInterface.On("MakeScheduler").Return(new(MockScheduler))
 	jobServer.MessageExportJob = exportInterface
 
-	schedulers := jobServer.InitSchedulers()
-	schedulers.Start()
-	time.Sleep(1 * time.Second)
+	t.Run("Base", func(t *testing.T) {
+		jobServer.InitSchedulers()
+		jobServer.StartSchedulers()
+		time.Sleep(time.Second)
 
-	// They should be all on here
-	for _, element := range schedulers.nextRunTimes {
-		assert.NotNil(t, element)
-	}
+		jobServer.StopSchedulers()
+		// They should be all on here
+		for _, element := range jobServer.schedulers.nextRunTimes {
+			assert.NotNil(t, element)
+		}
+	})
 
-	schedulers.HandleClusterLeaderChange(false)
-	time.Sleep(1 * time.Second)
-	// They should be turned off
-	for _, element := range schedulers.nextRunTimes {
-		assert.Nil(t, element)
-	}
+	t.Run("ClusterLeaderChanged", func(t *testing.T) {
+		jobServer.InitSchedulers()
+		jobServer.StartSchedulers()
+		time.Sleep(time.Second)
+		jobServer.HandleClusterLeaderChange(false)
+		jobServer.StopSchedulers()
+		// They should be turned off
+		for _, element := range jobServer.schedulers.nextRunTimes {
+			assert.Nil(t, element)
+		}
+	})
 
-	// After running a config change, they should stay off
-	schedulers.handleConfigChange(nil, nil)
-	for _, element := range schedulers.nextRunTimes {
-		assert.Nil(t, element)
-	}
-
-	schedulers.Stop()
-
+	t.Run("ConfigChanged", func(t *testing.T) {
+		jobServer.InitSchedulers()
+		jobServer.StartSchedulers()
+		time.Sleep(time.Second)
+		jobServer.HandleClusterLeaderChange(false)
+		// After running a config change, they should stay off
+		jobServer.schedulers.handleConfigChange(nil, nil)
+		jobServer.StopSchedulers()
+		for _, element := range jobServer.schedulers.nextRunTimes {
+			assert.Nil(t, element)
+		}
+	})
 }

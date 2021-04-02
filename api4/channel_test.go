@@ -4,6 +4,7 @@
 package api4
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sort"
@@ -12,12 +13,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/mattermost/mattermost-server/v5/plugin/plugintest/mock"
 	"github.com/mattermost/mattermost-server/v5/store/storetest/mocks"
 	"github.com/mattermost/mattermost-server/v5/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCreateChannel(t *testing.T) {
@@ -2150,6 +2152,7 @@ func TestViewChannel(t *testing.T) {
 	CheckNoError(t, resp)
 	require.Equal(t, channel.TotalMsgCount, member.MsgCount, "should match message counts")
 	require.Equal(t, int64(0), member.MentionCount, "should have no mentions")
+	require.Equal(t, int64(0), member.MentionCountRoot, "should have no mentions")
 
 	_, resp = Client.ViewChannel("junk", view)
 	CheckBadRequestStatus(t, resp)
@@ -2285,8 +2288,8 @@ func TestUpdateChannelRoles(t *testing.T) {
 	defer th.TearDown()
 	Client := th.Client
 
-	const CHANNEL_ADMIN = "channel_user channel_admin"
-	const CHANNEL_MEMBER = "channel_user"
+	const ChannelAdmin = "channel_user channel_admin"
+	const ChannelMember = "channel_user"
 
 	// User 1 creates a channel, making them channel admin by default.
 	channel := th.CreatePublicChannel()
@@ -2295,44 +2298,44 @@ func TestUpdateChannelRoles(t *testing.T) {
 	th.App.AddUserToChannel(th.BasicUser2, channel)
 
 	// User 1 promotes User 2
-	pass, resp := Client.UpdateChannelRoles(channel.Id, th.BasicUser2.Id, CHANNEL_ADMIN)
+	pass, resp := Client.UpdateChannelRoles(channel.Id, th.BasicUser2.Id, ChannelAdmin)
 	CheckNoError(t, resp)
 	require.True(t, pass, "should have passed")
 
 	member, resp := Client.GetChannelMember(channel.Id, th.BasicUser2.Id, "")
 	CheckNoError(t, resp)
-	require.Equal(t, CHANNEL_ADMIN, member.Roles, "roles don't match")
+	require.Equal(t, ChannelAdmin, member.Roles, "roles don't match")
 
 	// User 1 demotes User 2
-	_, resp = Client.UpdateChannelRoles(channel.Id, th.BasicUser2.Id, CHANNEL_MEMBER)
+	_, resp = Client.UpdateChannelRoles(channel.Id, th.BasicUser2.Id, ChannelMember)
 	CheckNoError(t, resp)
 
 	th.LoginBasic2()
 
 	// User 2 cannot demote User 1
-	_, resp = Client.UpdateChannelRoles(channel.Id, th.BasicUser.Id, CHANNEL_MEMBER)
+	_, resp = Client.UpdateChannelRoles(channel.Id, th.BasicUser.Id, ChannelMember)
 	CheckForbiddenStatus(t, resp)
 
 	// User 2 cannot promote self
-	_, resp = Client.UpdateChannelRoles(channel.Id, th.BasicUser2.Id, CHANNEL_ADMIN)
+	_, resp = Client.UpdateChannelRoles(channel.Id, th.BasicUser2.Id, ChannelAdmin)
 	CheckForbiddenStatus(t, resp)
 
 	th.LoginBasic()
 
 	// User 1 demotes self
-	_, resp = Client.UpdateChannelRoles(channel.Id, th.BasicUser.Id, CHANNEL_MEMBER)
+	_, resp = Client.UpdateChannelRoles(channel.Id, th.BasicUser.Id, ChannelMember)
 	CheckNoError(t, resp)
 
 	// System Admin promotes User 1
-	_, resp = th.SystemAdminClient.UpdateChannelRoles(channel.Id, th.BasicUser.Id, CHANNEL_ADMIN)
+	_, resp = th.SystemAdminClient.UpdateChannelRoles(channel.Id, th.BasicUser.Id, ChannelAdmin)
 	CheckNoError(t, resp)
 
 	// System Admin demotes User 1
-	_, resp = th.SystemAdminClient.UpdateChannelRoles(channel.Id, th.BasicUser.Id, CHANNEL_MEMBER)
+	_, resp = th.SystemAdminClient.UpdateChannelRoles(channel.Id, th.BasicUser.Id, ChannelMember)
 	CheckNoError(t, resp)
 
 	// System Admin promotes User 1
-	_, resp = th.SystemAdminClient.UpdateChannelRoles(channel.Id, th.BasicUser.Id, CHANNEL_ADMIN)
+	_, resp = th.SystemAdminClient.UpdateChannelRoles(channel.Id, th.BasicUser.Id, ChannelAdmin)
 	CheckNoError(t, resp)
 
 	th.LoginBasic()
@@ -2340,16 +2343,16 @@ func TestUpdateChannelRoles(t *testing.T) {
 	_, resp = Client.UpdateChannelRoles(channel.Id, th.BasicUser.Id, "junk")
 	CheckBadRequestStatus(t, resp)
 
-	_, resp = Client.UpdateChannelRoles(channel.Id, "junk", CHANNEL_MEMBER)
+	_, resp = Client.UpdateChannelRoles(channel.Id, "junk", ChannelMember)
 	CheckBadRequestStatus(t, resp)
 
-	_, resp = Client.UpdateChannelRoles("junk", th.BasicUser.Id, CHANNEL_MEMBER)
+	_, resp = Client.UpdateChannelRoles("junk", th.BasicUser.Id, ChannelMember)
 	CheckBadRequestStatus(t, resp)
 
-	_, resp = Client.UpdateChannelRoles(channel.Id, model.NewId(), CHANNEL_MEMBER)
+	_, resp = Client.UpdateChannelRoles(channel.Id, model.NewId(), ChannelMember)
 	CheckNotFoundStatus(t, resp)
 
-	_, resp = Client.UpdateChannelRoles(model.NewId(), th.BasicUser.Id, CHANNEL_MEMBER)
+	_, resp = Client.UpdateChannelRoles(model.NewId(), th.BasicUser.Id, ChannelMember)
 	CheckForbiddenStatus(t, resp)
 }
 
@@ -2490,7 +2493,7 @@ func TestUpdateChannelNotifyProps(t *testing.T) {
 	CheckNoError(t, resp)
 	require.True(t, pass, "should have passed")
 
-	member, err := th.App.GetChannelMember(th.BasicChannel.Id, th.BasicUser.Id)
+	member, err := th.App.GetChannelMember(context.Background(), th.BasicChannel.Id, th.BasicUser.Id)
 	require.Nil(t, err)
 	require.Equal(t, model.CHANNEL_NOTIFY_MENTION, member.NotifyProps[model.DESKTOP_NOTIFY_PROP], "bad update")
 	require.Equal(t, model.CHANNEL_MARK_UNREAD_MENTION, member.NotifyProps[model.MARK_UNREAD_NOTIFY_PROP], "bad update")
@@ -3627,7 +3630,7 @@ func TestGetChannelModerations(t *testing.T) {
 		}
 	})
 
-	t.Run("Retuns the correct value for manage_members depending on whether the channel is public or private", func(t *testing.T) {
+	t.Run("Returns the correct value for manage_members depending on whether the channel is public or private", func(t *testing.T) {
 		scheme := th.SetupTeamScheme()
 		team.SchemeId = &scheme.Id
 		_, err := th.App.UpdateTeamScheme(team)
@@ -3970,11 +3973,11 @@ func TestMoveChannel(t *testing.T) {
 		require.Equal(t, team2.Id, ch.TeamId)
 	})
 
-	t.Run("Should fail when trying to move a private channel", func(t *testing.T) {
+	t.Run("Should move private channel", func(t *testing.T) {
 		channel := th.CreatePrivateChannel()
-		_, resp := Client.MoveChannel(channel.Id, team1.Id, false)
-		require.NotNil(t, resp.Error)
-		CheckErrorMessage(t, resp, "api.channel.move_channel.type.invalid")
+		ch, resp := th.SystemAdminClient.MoveChannel(channel.Id, team1.Id, false)
+		require.Nil(t, resp.Error)
+		require.Equal(t, team1.Id, ch.TeamId)
 	})
 
 	t.Run("Should fail when trying to move a DM channel", func(t *testing.T) {
@@ -4015,7 +4018,22 @@ func TestMoveChannel(t *testing.T) {
 		_, resp = client.MoveChannel(publicChannel.Id, team2.Id, false)
 		require.NotNil(t, resp.Error)
 		CheckErrorMessage(t, resp, "app.channel.move_channel.members_do_not_match.error")
-	}, "Should fail to move channel due to a member not member of target team")
+	}, "Should fail to move public channel due to a member not member of target team")
+
+	th.TestForSystemAdminAndLocal(t, func(t *testing.T, client *model.Client4) {
+		privateChannel := th.CreatePrivateChannel()
+		user := th.BasicUser
+
+		_, resp := client.RemoveTeamMember(team2.Id, user.Id)
+		CheckNoError(t, resp)
+
+		_, resp = client.AddChannelMember(privateChannel.Id, user.Id)
+		CheckNoError(t, resp)
+
+		_, resp = client.MoveChannel(privateChannel.Id, team2.Id, false)
+		require.NotNil(t, resp.Error)
+		CheckErrorMessage(t, resp, "app.channel.move_channel.members_do_not_match.error")
+	}, "Should fail to move private channel due to a member not member of target team")
 
 	th.TestForSystemAdminAndLocal(t, func(t *testing.T, client *model.Client4) {
 		publicChannel := th.CreatePublicChannel()
@@ -4030,5 +4048,60 @@ func TestMoveChannel(t *testing.T) {
 		newChannel, resp := client.MoveChannel(publicChannel.Id, team2.Id, true)
 		require.Nil(t, resp.Error)
 		require.Equal(t, team2.Id, newChannel.TeamId)
-	}, "Should be able to (force) move channel by a member that is not member of target team")
+	}, "Should be able to (force) move public channel by a member that is not member of target team")
+
+	th.TestForSystemAdminAndLocal(t, func(t *testing.T, client *model.Client4) {
+		privateChannel := th.CreatePrivateChannel()
+		user := th.BasicUser
+
+		_, resp := client.RemoveTeamMember(team2.Id, user.Id)
+		CheckNoError(t, resp)
+
+		_, resp = client.AddChannelMember(privateChannel.Id, user.Id)
+		CheckNoError(t, resp)
+
+		newChannel, resp := client.MoveChannel(privateChannel.Id, team2.Id, true)
+		require.Nil(t, resp.Error)
+		require.Equal(t, team2.Id, newChannel.TeamId)
+	}, "Should be able to (force) move private channel by a member that is not member of target team")
+}
+
+func TestRootMentionsCount(t *testing.T) {
+	th := Setup(t).InitBasic()
+	defer th.TearDown()
+	Client := th.Client
+	user := th.BasicUser
+	channel := th.BasicChannel
+
+	// initially, MentionCountRoot is 0 in the database
+	channelMember, err := th.App.Srv().Store.Channel().GetMember(context.Background(), channel.Id, user.Id)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), channelMember.MentionCountRoot)
+	require.Equal(t, int64(0), channelMember.MentionCount)
+
+	// mention the user in a root post
+	post1, resp := th.SystemAdminClient.CreatePost(&model.Post{ChannelId: channel.Id, Message: "hey @" + user.Username})
+	CheckNoError(t, resp)
+	// mention the user in a reply post
+	post2 := &model.Post{ChannelId: channel.Id, Message: "reply at @" + user.Username, RootId: post1.Id}
+	_, resp = th.SystemAdminClient.CreatePost(post2)
+	CheckNoError(t, resp)
+
+	// this should perform lazy migration and populate the field
+	channelUnread, resp := Client.GetChannelUnread(channel.Id, user.Id)
+	CheckNoError(t, resp)
+	// reply post is not counted, so we should have one root mention
+	require.EqualValues(t, int64(1), channelUnread.MentionCountRoot)
+	// regular count stays the same
+	require.Equal(t, int64(2), channelUnread.MentionCount)
+	// validate that DB is updated
+	channelMember, err = th.App.Srv().Store.Channel().GetMember(context.Background(), channel.Id, user.Id)
+	require.NoError(t, err)
+	require.EqualValues(t, int64(1), channelMember.MentionCountRoot)
+
+	// validate that Team level counts are calculated
+	counts, appErr := th.App.GetTeamUnread(channel.TeamId, user.Id)
+	require.Nil(t, appErr)
+	require.Equal(t, int64(1), counts.MentionCountRoot)
+	require.Equal(t, int64(2), counts.MentionCount)
 }

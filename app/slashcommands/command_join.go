@@ -6,29 +6,29 @@ package slashcommands
 import (
 	"strings"
 
-	goi18n "github.com/mattermost/go-i18n/i18n"
 	"github.com/mattermost/mattermost-server/v5/app"
 	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/shared/i18n"
 )
 
 type JoinProvider struct {
 }
 
 const (
-	CMD_JOIN = "join"
+	CmdJoin = "join"
 )
 
 func init() {
 	app.RegisterCommandProvider(&JoinProvider{})
 }
 
-func (me *JoinProvider) GetTrigger() string {
-	return CMD_JOIN
+func (*JoinProvider) GetTrigger() string {
+	return CmdJoin
 }
 
-func (me *JoinProvider) GetCommand(a *app.App, T goi18n.TranslateFunc) *model.Command {
+func (*JoinProvider) GetCommand(a *app.App, T i18n.TranslateFunc) *model.Command {
 	return &model.Command{
-		Trigger:          CMD_JOIN,
+		Trigger:          CmdJoin,
 		AutoComplete:     true,
 		AutoCompleteDesc: T("api.command_join.desc"),
 		AutoCompleteHint: T("api.command_join.hint"),
@@ -36,8 +36,8 @@ func (me *JoinProvider) GetCommand(a *app.App, T goi18n.TranslateFunc) *model.Co
 	}
 }
 
-func (me *JoinProvider) DoCommand(a *app.App, args *model.CommandArgs, message string) *model.CommandResponse {
-	channelName := message
+func (*JoinProvider) DoCommand(a *app.App, args *model.CommandArgs, message string) *model.CommandResponse {
+	channelName := strings.ToLower(message)
 
 	if strings.HasPrefix(message, "~") {
 		channelName = message[1:]

@@ -9,17 +9,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 	"unicode/utf8"
 
-	"github.com/mattermost/mattermost-server/v5/services/timezones"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/text/language"
+
+	"github.com/mattermost/mattermost-server/v5/services/timezones"
 )
 
 const (
@@ -57,6 +56,7 @@ const (
 	USER_NAME_MIN_LENGTH      = 1
 	USER_PASSWORD_MAX_LENGTH  = 72
 	USER_LOCALE_MAX_LENGTH    = 5
+	USER_TIMEZONE_MAX_RUNES   = 256
 )
 
 //msgp:tuple User
@@ -96,13 +96,22 @@ type User struct {
 	BotLastIconUpdate      int64     `db:"-" json:"bot_last_icon_update,omitempty"`
 	TermsOfServiceId       string    `db:"-" json:"terms_of_service_id,omitempty"`
 	TermsOfServiceCreateAt int64     `db:"-" json:"terms_of_service_create_at,omitempty"`
+	DisableWelcomeEmail    bool      `db:"-" json:"disable_welcome_email"`
 }
 
+//msgp UserMap
+
+// UserMap is a map from a userId to a user object.
+// It is used to generate methods which can be used for fast serialization/de-serialization.
+type UserMap map[string]*User
+
+//msgp:ignore UserUpdate
 type UserUpdate struct {
 	Old *User
 	New *User
 }
 
+//msgp:ignore UserPatch
 type UserPatch struct {
 	Username    *string   `json:"username"`
 	Password    *string   `json:"password,omitempty"`
@@ -117,12 +126,14 @@ type UserPatch struct {
 	Timezone    StringMap `json:"timezone"`
 }
 
+//msgp:ignore UserAuth
 type UserAuth struct {
-	Password    string  `json:"password,omitempty"`
+	Password    string  `json:"password,omitempty"` // DEPRECATED: It is not used.
 	AuthData    *string `json:"auth_data,omitempty"`
 	AuthService string  `json:"auth_service,omitempty"`
 }
 
+//msgp:ignore UserForIndexing
 type UserForIndexing struct {
 	Id          string   `json:"id"`
 	Username    string   `json:"username"`
@@ -136,6 +147,7 @@ type UserForIndexing struct {
 	ChannelsIds []string `json:"channel_id"`
 }
 
+//msgp:ignore ViewUsersRestrictions
 type ViewUsersRestrictions struct {
 	Teams    []string
 	Channels []string
@@ -152,6 +164,7 @@ func (r *ViewUsersRestrictions) Hash() string {
 	return fmt.Sprintf("%x", hash.Sum(nil))
 }
 
+//msgp:ignore UserSlice
 type UserSlice []*User
 
 func (u UserSlice) Usernames() []string {
@@ -260,7 +273,7 @@ func (u *User) IsValid() *AppError {
 		return InvalidUserError("username", u.Id)
 	}
 
-	if len(u.Email) > USER_EMAIL_MAX_LENGTH || len(u.Email) == 0 || !IsValidEmail(u.Email) {
+	if len(u.Email) > USER_EMAIL_MAX_LENGTH || u.Email == "" || !IsValidEmail(u.Email) {
 		return InvalidUserError("email", u.Id)
 	}
 
@@ -284,11 +297,11 @@ func (u *User) IsValid() *AppError {
 		return InvalidUserError("auth_data", u.Id)
 	}
 
-	if u.AuthData != nil && len(*u.AuthData) > 0 && len(u.AuthService) == 0 {
+	if u.AuthData != nil && *u.AuthData != "" && u.AuthService == "" {
 		return InvalidUserError("auth_data_type", u.Id)
 	}
 
-	if len(u.Password) > 0 && u.AuthData != nil && len(*u.AuthData) > 0 {
+	if u.Password != "" && u.AuthData != nil && *u.AuthData != "" {
 		return InvalidUserError("auth_data_pwd", u.Id)
 	}
 
@@ -298,6 +311,14 @@ func (u *User) IsValid() *AppError {
 
 	if !IsValidLocale(u.Locale) {
 		return InvalidUserError("locale", u.Id)
+	}
+
+	if len(u.Timezone) > 0 {
+		if tzJSON, err := json.Marshal(u.Timezone); err != nil {
+			return NewAppError("User.IsValid", "model.user.is_valid.marshal.app_error", nil, err.Error(), http.StatusInternalServerError)
+		} else if utf8.RuneCount(tzJSON) > USER_TIMEZONE_MAX_RUNES {
+			return InvalidUserError("timezone_limit", u.Id)
+		}
 	}
 
 	return nil
@@ -367,7 +388,7 @@ func (u *User) PreSave() {
 		u.Timezone = timezones.DefaultUserTimezone()
 	}
 
-	if len(u.Password) > 0 {
+	if u.Password != "" {
 		u.Password = HashPassword(u.Password)
 	}
 }
@@ -400,7 +421,7 @@ func (u *User) PreUpdate() {
 		splitKeys := strings.Split(u.NotifyProps[MENTION_KEYS_NOTIFY_PROP], ",")
 		goodKeys := []string{}
 		for _, key := range splitKeys {
-			if len(key) > 0 {
+			if key != "" {
 				goodKeys = append(goodKeys, strings.ToLower(key))
 			}
 		}
@@ -540,11 +561,11 @@ func (u *User) SanitizeInput(isAdmin bool) {
 	if !isAdmin {
 		u.AuthData = NewString("")
 		u.AuthService = ""
+		u.EmailVerified = false
 	}
 	u.LastPasswordUpdate = 0
 	u.LastPictureUpdate = 0
 	u.FailedAttempts = 0
-	u.EmailVerified = false
 	u.MfaActive = false
 	u.MfaSecret = ""
 }
@@ -582,12 +603,22 @@ func (u *User) AddNotifyProp(key string, value string) {
 	u.NotifyProps[key] = value
 }
 
+func (u *User) SetCustomStatus(cs *CustomStatus) {
+	u.MakeNonNil()
+	u.Props[UserPropsKeyCustomStatus] = cs.ToJson()
+}
+
+func (u *User) ClearCustomStatus() {
+	u.MakeNonNil()
+	u.Props[UserPropsKeyCustomStatus] = ""
+}
+
 func (u *User) GetFullName() string {
-	if len(u.FirstName) > 0 && len(u.LastName) > 0 {
+	if u.FirstName != "" && u.LastName != "" {
 		return u.FirstName + " " + u.LastName
-	} else if len(u.FirstName) > 0 {
+	} else if u.FirstName != "" {
 		return u.FirstName
-	} else if len(u.LastName) > 0 {
+	} else if u.LastName != "" {
 		return u.LastName
 	} else {
 		return ""
@@ -598,13 +629,13 @@ func (u *User) getDisplayName(baseName, nameFormat string) string {
 	displayName := baseName
 
 	if nameFormat == SHOW_NICKNAME_FULLNAME {
-		if len(u.Nickname) > 0 {
+		if u.Nickname != "" {
 			displayName = u.Nickname
-		} else if fullName := u.GetFullName(); len(fullName) > 0 {
+		} else if fullName := u.GetFullName(); fullName != "" {
 			displayName = fullName
 		}
 	} else if nameFormat == SHOW_FULLNAME {
-		if fullName := u.GetFullName(); len(fullName) > 0 {
+		if fullName := u.GetFullName(); fullName != "" {
 			displayName = fullName
 		}
 	}
@@ -685,7 +716,10 @@ func (u *User) IsSSOUser() bool {
 }
 
 func (u *User) IsOAuthUser() bool {
-	return u.AuthService == USER_AUTH_SERVICE_GITLAB
+	return u.AuthService == SERVICE_GITLAB ||
+		u.AuthService == SERVICE_GOOGLE ||
+		u.AuthService == SERVICE_OFFICE365 ||
+		u.AuthService == SERVICE_OPENID
 }
 
 func (u *User) IsLDAPUser() bool {
@@ -698,6 +732,33 @@ func (u *User) IsSAMLUser() bool {
 
 func (u *User) GetPreferredTimezone() string {
 	return GetPreferredTimezone(u.Timezone)
+}
+
+func (u *User) ToPatch() *UserPatch {
+	return &UserPatch{
+		Username: &u.Username, Password: &u.Password,
+		Nickname: &u.Nickname, FirstName: &u.FirstName, LastName: &u.LastName,
+		Position: &u.Position, Email: &u.Email,
+		Props: u.Props, NotifyProps: u.NotifyProps,
+		Locale: &u.Locale, Timezone: u.Timezone,
+	}
+}
+
+func (u *UserPatch) SetField(fieldName string, fieldValue string) {
+	switch fieldName {
+	case "FirstName":
+		u.FirstName = &fieldValue
+	case "LastName":
+		u.LastName = &fieldValue
+	case "Nickname":
+		u.Nickname = &fieldValue
+	case "Email":
+		u.Email = &fieldValue
+	case "Position":
+		u.Position = &fieldValue
+	case "Username":
+		u.Username = &fieldValue
+	}
 }
 
 // UserFromJson will decode the input and return a User
@@ -754,7 +815,7 @@ func HashPassword(password string) string {
 // ComparePassword compares the hash
 func ComparePassword(hash string, password string) bool {
 
-	if len(password) == 0 || len(hash) == 0 {
+	if password == "" || hash == "" {
 		return false
 	}
 
@@ -852,6 +913,7 @@ func IsValidLocale(locale string) bool {
 	return true
 }
 
+//msgp:ignore UserWithGroups
 type UserWithGroups struct {
 	User
 	GroupIDs    *string  `json:"-"`
@@ -866,12 +928,13 @@ func (u *UserWithGroups) GetGroupIDs() []string {
 		return nil
 	}
 	trimmed := strings.TrimSpace(*u.GroupIDs)
-	if len(trimmed) == 0 {
+	if trimmed == "" {
 		return nil
 	}
 	return strings.Split(trimmed, ",")
 }
 
+//msgp:ignore UsersWithGroupsAndCount
 type UsersWithGroupsAndCount struct {
 	Users []*UserWithGroups `json:"users"`
 	Count int64             `json:"total_count"`
@@ -882,28 +945,4 @@ func UsersWithGroupsAndCountFromJson(data io.Reader) *UsersWithGroupsAndCount {
 	bodyBytes, _ := ioutil.ReadAll(data)
 	json.Unmarshal(bodyBytes, uwg)
 	return uwg
-}
-
-var passwordRandomSource = rand.NewSource(time.Now().Unix())
-var passwordSpecialChars = "!$%^&*(),."
-var passwordNumbers = "0123456789"
-var passwordUpperCaseLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-var passwordLowerCaseLetters = "abcdefghijklmnopqrstuvwxyz"
-var passwordAllChars = passwordSpecialChars + passwordNumbers + passwordUpperCaseLetters + passwordLowerCaseLetters
-
-func GeneratePassword(minimumLength int) string {
-	r := rand.New(passwordRandomSource)
-
-	// Make sure we are guaranteed at least one of each type to meet any possible password complexity requirements.
-	password := string([]rune(passwordUpperCaseLetters)[r.Intn(len(passwordUpperCaseLetters))]) +
-		string([]rune(passwordNumbers)[r.Intn(len(passwordNumbers))]) +
-		string([]rune(passwordLowerCaseLetters)[r.Intn(len(passwordLowerCaseLetters))]) +
-		string([]rune(passwordSpecialChars)[r.Intn(len(passwordSpecialChars))])
-
-	for len(password) < minimumLength {
-		i := r.Intn(len(passwordAllChars))
-		password = password + string([]rune(passwordAllChars)[i])
-	}
-
-	return password
 }

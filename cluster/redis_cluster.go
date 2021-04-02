@@ -2,12 +2,12 @@ package cluster
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 
-	"github.com/mattermost/mattermost-server/v5/mlog"
-
-	"github.com/go-redis/redis"
+	"github.com/mattermost/mattermost-server/v5/shared/mlog"
+	"github.com/go-redis/redis/v8"
 	"github.com/mattermost/mattermost-server/v5/app"
 	"github.com/mattermost/mattermost-server/v5/einterfaces"
 	"github.com/mattermost/mattermost-server/v5/model"
@@ -116,7 +116,7 @@ func (me *RedisCluster) processRedisMessage(msg *redis.Message) {
 
 func (me *RedisCluster) subscribe() {
 	mlog.Info("***** starting redis_clustering. Subscribing ... *****")
-	me.pubsub = me.client.Subscribe(me.redisTopic)
+	me.pubsub = me.client.Subscribe(context.Background(), me.redisTopic)
 	func() {
 		for {
 			msg, ok := <-me.pubsub.Channel()
@@ -133,7 +133,7 @@ func (me *RedisCluster) subscribe() {
 func (me *RedisCluster) StopInterNodeCommunication() {
 	defer close(me.subscribeChan)
 	if me.pubsub != nil {
-		error := me.pubsub.Unsubscribe(me.redisTopic)
+		error := me.pubsub.Unsubscribe(context.Background(), me.redisTopic)
 		if error != nil {
 			mlog.Error(error.Error())
 		}
@@ -169,7 +169,7 @@ func (me *RedisCluster) SendClusterMessage(cluster *model.ClusterMessage) {
 		cluster.Props = make(map[string]string)
 	}
 	cluster.Props["instance-id"] = me.redisInstanceId
-	me.client.Publish(me.redisTopic, []byte(cluster.ToJson()))
+	me.client.Publish(context.Background(), me.redisTopic, []byte(cluster.ToJson()))
 }
 func (me *RedisCluster) NotifyMsg(buf []byte) {
 	log.Println("redis cluster doesnt support notifyMsg")

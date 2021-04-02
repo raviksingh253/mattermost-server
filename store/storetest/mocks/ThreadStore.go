@@ -14,6 +14,29 @@ type ThreadStore struct {
 	mock.Mock
 }
 
+// CollectThreadsWithNewerReplies provides a mock function with given fields: userId, channelIds, timestamp
+func (_m *ThreadStore) CollectThreadsWithNewerReplies(userId string, channelIds []string, timestamp int64) ([]string, error) {
+	ret := _m.Called(userId, channelIds, timestamp)
+
+	var r0 []string
+	if rf, ok := ret.Get(0).(func(string, []string, int64) []string); ok {
+		r0 = rf(userId, channelIds, timestamp)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, []string, int64) error); ok {
+		r1 = rf(userId, channelIds, timestamp)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // Delete provides a mock function with given fields: postId
 func (_m *ThreadStore) Delete(postId string) error {
 	ret := _m.Called(postId)
@@ -21,6 +44,20 @@ func (_m *ThreadStore) Delete(postId string) error {
 	var r0 error
 	if rf, ok := ret.Get(0).(func(string) error); ok {
 		r0 = rf(postId)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// DeleteMembershipForUser provides a mock function with given fields: userId, postID
+func (_m *ThreadStore) DeleteMembershipForUser(userId string, postID string) error {
+	ret := _m.Called(userId, postID)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = rf(userId, postID)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -51,6 +88,163 @@ func (_m *ThreadStore) Get(id string) (*model.Thread, error) {
 	return r0, r1
 }
 
+// GetMembershipForUser provides a mock function with given fields: userId, postID
+func (_m *ThreadStore) GetMembershipForUser(userId string, postID string) (*model.ThreadMembership, error) {
+	ret := _m.Called(userId, postID)
+
+	var r0 *model.ThreadMembership
+	if rf, ok := ret.Get(0).(func(string, string) *model.ThreadMembership); ok {
+		r0 = rf(userId, postID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*model.ThreadMembership)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(userId, postID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetMembershipsForUser provides a mock function with given fields: userId, teamID
+func (_m *ThreadStore) GetMembershipsForUser(userId string, teamID string) ([]*model.ThreadMembership, error) {
+	ret := _m.Called(userId, teamID)
+
+	var r0 []*model.ThreadMembership
+	if rf, ok := ret.Get(0).(func(string, string) []*model.ThreadMembership); ok {
+		r0 = rf(userId, teamID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*model.ThreadMembership)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(userId, teamID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetPosts provides a mock function with given fields: threadId, since
+func (_m *ThreadStore) GetPosts(threadId string, since int64) ([]*model.Post, error) {
+	ret := _m.Called(threadId, since)
+
+	var r0 []*model.Post
+	if rf, ok := ret.Get(0).(func(string, int64) []*model.Post); ok {
+		r0 = rf(threadId, since)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*model.Post)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, int64) error); ok {
+		r1 = rf(threadId, since)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetThreadForUser provides a mock function with given fields: userId, teamId, threadId, extended
+func (_m *ThreadStore) GetThreadForUser(userId string, teamId string, threadId string, extended bool) (*model.ThreadResponse, error) {
+	ret := _m.Called(userId, teamId, threadId, extended)
+
+	var r0 *model.ThreadResponse
+	if rf, ok := ret.Get(0).(func(string, string, string, bool) *model.ThreadResponse); ok {
+		r0 = rf(userId, teamId, threadId, extended)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*model.ThreadResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, string, string, bool) error); ok {
+		r1 = rf(userId, teamId, threadId, extended)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetThreadsForUser provides a mock function with given fields: userId, teamId, opts
+func (_m *ThreadStore) GetThreadsForUser(userId string, teamId string, opts model.GetUserThreadsOpts) (*model.Threads, error) {
+	ret := _m.Called(userId, teamId, opts)
+
+	var r0 *model.Threads
+	if rf, ok := ret.Get(0).(func(string, string, model.GetUserThreadsOpts) *model.Threads); ok {
+		r0 = rf(userId, teamId, opts)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*model.Threads)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, string, model.GetUserThreadsOpts) error); ok {
+		r1 = rf(userId, teamId, opts)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MaintainMembership provides a mock function with given fields: userId, postID, following, incrementMentions, updateFollowing, updateViewedTimestamp
+func (_m *ThreadStore) MaintainMembership(userId string, postID string, following bool, incrementMentions bool, updateFollowing bool, updateViewedTimestamp bool) error {
+	ret := _m.Called(userId, postID, following, incrementMentions, updateFollowing, updateViewedTimestamp)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, string, bool, bool, bool, bool) error); ok {
+		r0 = rf(userId, postID, following, incrementMentions, updateFollowing, updateViewedTimestamp)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MarkAllAsRead provides a mock function with given fields: userId, teamID
+func (_m *ThreadStore) MarkAllAsRead(userId string, teamID string) error {
+	ret := _m.Called(userId, teamID)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = rf(userId, teamID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MarkAsRead provides a mock function with given fields: userId, threadID, timestamp
+func (_m *ThreadStore) MarkAsRead(userId string, threadID string, timestamp int64) error {
+	ret := _m.Called(userId, threadID, timestamp)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, string, int64) error); ok {
+		r0 = rf(userId, threadID, timestamp)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // Save provides a mock function with given fields: thread
 func (_m *ThreadStore) Save(thread *model.Thread) (*model.Thread, error) {
 	ret := _m.Called(thread)
@@ -67,6 +261,29 @@ func (_m *ThreadStore) Save(thread *model.Thread) (*model.Thread, error) {
 	var r1 error
 	if rf, ok := ret.Get(1).(func(*model.Thread) error); ok {
 		r1 = rf(thread)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// SaveMembership provides a mock function with given fields: membership
+func (_m *ThreadStore) SaveMembership(membership *model.ThreadMembership) (*model.ThreadMembership, error) {
+	ret := _m.Called(membership)
+
+	var r0 *model.ThreadMembership
+	if rf, ok := ret.Get(0).(func(*model.ThreadMembership) *model.ThreadMembership); ok {
+		r0 = rf(membership)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*model.ThreadMembership)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(*model.ThreadMembership) error); ok {
+		r1 = rf(membership)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -125,4 +342,41 @@ func (_m *ThreadStore) Update(thread *model.Thread) (*model.Thread, error) {
 	}
 
 	return r0, r1
+}
+
+// UpdateMembership provides a mock function with given fields: membership
+func (_m *ThreadStore) UpdateMembership(membership *model.ThreadMembership) (*model.ThreadMembership, error) {
+	ret := _m.Called(membership)
+
+	var r0 *model.ThreadMembership
+	if rf, ok := ret.Get(0).(func(*model.ThreadMembership) *model.ThreadMembership); ok {
+		r0 = rf(membership)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*model.ThreadMembership)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(*model.ThreadMembership) error); ok {
+		r1 = rf(membership)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// UpdateUnreadsByChannel provides a mock function with given fields: userId, changedThreads, timestamp, updateViewedTimestamp
+func (_m *ThreadStore) UpdateUnreadsByChannel(userId string, changedThreads []string, timestamp int64, updateViewedTimestamp bool) error {
+	ret := _m.Called(userId, changedThreads, timestamp, updateViewedTimestamp)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, []string, int64, bool) error); ok {
+		r0 = rf(userId, changedThreads, timestamp, updateViewedTimestamp)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
 }
