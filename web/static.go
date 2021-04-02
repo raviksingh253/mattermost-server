@@ -10,8 +10,9 @@ import (
 	"strings"
 
 	"github.com/NYTimes/gziphandler"
-	"github.com/mattermost/mattermost-server/v5/mlog"
+
 	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/shared/mlog"
 	"github.com/mattermost/mattermost-server/v5/utils"
 	"github.com/mattermost/mattermost-server/v5/utils/fileutils"
 )
@@ -55,7 +56,7 @@ func (w *Web) InitStatic() {
 
 func root(c *Context, w http.ResponseWriter, r *http.Request) {
 
-	if !CheckClientCompatability(r.UserAgent()) {
+	if !CheckClientCompatibility(r.UserAgent()) {
 		renderUnsupportedBrowser(c.App, w, r)
 		return
 	}

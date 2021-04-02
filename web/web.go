@@ -12,9 +12,9 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/mattermost/mattermost-server/v5/app"
-	"github.com/mattermost/mattermost-server/v5/mlog"
 	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/mattermost/mattermost-server/v5/services/configservice"
+	"github.com/mattermost/mattermost-server/v5/shared/mlog"
 	"github.com/mattermost/mattermost-server/v5/utils"
 )
 
@@ -50,7 +50,7 @@ var browserMinimumSupported = map[string]int{
 	"BrowserSafari": 12,
 }
 
-func CheckClientCompatability(agentString string) bool {
+func CheckClientCompatibility(agentString string) bool {
 	ua := uasurfer.Parse(agentString)
 
 	if version, exist := browserMinimumSupported[ua.Browser.Name.String()]; exist && (ua.Browser.Version.Major < version || version < 0) {
@@ -62,7 +62,7 @@ func CheckClientCompatability(agentString string) bool {
 
 func Handle404(config configservice.ConfigService, w http.ResponseWriter, r *http.Request) {
 	err := model.NewAppError("Handle404", "api.context.404.app_error", nil, "", http.StatusNotFound)
-	ipAddress := utils.GetIpAddress(r, config.Config().ServiceSettings.TrustedProxyIPHeader)
+	ipAddress := utils.GetIPAddress(r, config.Config().ServiceSettings.TrustedProxyIPHeader)
 	mlog.Debug("not found handler triggered", mlog.String("path", r.URL.Path), mlog.Int("code", 404), mlog.String("ip", ipAddress))
 
 	if IsApiCall(config, r) {

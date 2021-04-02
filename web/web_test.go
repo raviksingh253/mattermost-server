@@ -13,18 +13,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mattermost/mattermost-server/v5/app"
-	"github.com/mattermost/mattermost-server/v5/config"
-	"github.com/mattermost/mattermost-server/v5/mlog"
-	"github.com/mattermost/mattermost-server/v5/model"
-	"github.com/mattermost/mattermost-server/v5/plugin"
-	"github.com/mattermost/mattermost-server/v5/store"
-	"github.com/mattermost/mattermost-server/v5/store/localcachelayer"
-	"github.com/mattermost/mattermost-server/v5/store/storetest/mocks"
-	"github.com/mattermost/mattermost-server/v5/testlib"
-	"github.com/mattermost/mattermost-server/v5/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mattermost/mattermost-server/v5/app"
+	"github.com/mattermost/mattermost-server/v5/config"
+	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/plugin"
+	"github.com/mattermost/mattermost-server/v5/shared/mlog"
+	"github.com/mattermost/mattermost-server/v5/store/localcachelayer"
+	"github.com/mattermost/mattermost-server/v5/store/storetest/mocks"
+	"github.com/mattermost/mattermost-server/v5/utils"
 )
 
 var ApiClient *model.Client4
@@ -50,8 +49,8 @@ func SetupWithStoreMock(tb testing.TB) *TestHelper {
 	if testing.Short() {
 		tb.SkipNow()
 	}
-	store := testlib.GetMockStoreForSetupFunctions()
-	th := setupTestHelper(tb, store, false)
+
+	th := setupTestHelper(false)
 	emptyMockStore := mocks.Store{}
 	emptyMockStore.On("Close").Return(nil)
 	th.App.Srv().Store = &emptyMockStore
@@ -64,16 +63,16 @@ func Setup(tb testing.TB) *TestHelper {
 	}
 	store := mainHelper.GetStore()
 	store.DropAllTables()
-	return setupTestHelper(tb, store, true)
+	return setupTestHelper(true)
 }
 
-func setupTestHelper(t testing.TB, store store.Store, includeCacheLayer bool) *TestHelper {
-	memoryStore, err := config.NewMemoryStoreWithOptions(&config.MemoryStoreOptions{IgnoreEnvironmentOverrides: true})
-	if err != nil {
-		panic("failed to initialize memory store: " + err.Error())
-	}
-	*memoryStore.Get().AnnouncementSettings.AdminNoticesEnabled = false
-	*memoryStore.Get().AnnouncementSettings.UserNoticesEnabled = false
+func setupTestHelper(includeCacheLayer bool) *TestHelper {
+	memoryStore := config.NewTestMemoryStore()
+	newConfig := memoryStore.Get().Clone()
+	*newConfig.AnnouncementSettings.AdminNoticesEnabled = false
+	*newConfig.AnnouncementSettings.UserNoticesEnabled = false
+	*newConfig.PluginSettings.AutomaticPrepackagedPlugins = false
+	memoryStore.Set(newConfig)
 	var options []app.Option
 	options = append(options, app.ConfigStore(memoryStore))
 	options = append(options, app.StoreOverride(mainHelper.Store))
@@ -86,7 +85,10 @@ func setupTestHelper(t testing.TB, store store.Store, includeCacheLayer bool) *T
 	}
 	if includeCacheLayer {
 		// Adds the cache layer to the test store
-		s.Store = localcachelayer.NewLocalCacheLayer(s.Store, s.Metrics, s.Cluster, s.CacheProvider)
+		s.Store, err = localcachelayer.NewLocalCacheLayer(s.Store, s.Metrics, s.Cluster, s.CacheProvider)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	prevListenAddress := *s.Config().ServiceSettings.ListenAddress
@@ -209,7 +211,7 @@ func TestStaticFilesRequest(t *testing.T) {
 
 	// Activate the plugin
 	manifest, activated, reterr := th.App.GetPluginsEnvironment().Activate(pluginID)
-	require.Nil(t, reterr)
+	require.NoError(t, reterr)
 	require.NotNil(t, manifest)
 	require.True(t, activated)
 
@@ -304,7 +306,7 @@ func TestPublicFilesRequest(t *testing.T) {
 	assert.NoError(t, htmlFileErr)
 
 	manifest, activated, reterr := env.Activate(pluginID)
-	require.Nil(t, reterr)
+	require.NoError(t, reterr)
 	require.NotNil(t, manifest)
 	require.True(t, activated)
 
@@ -370,7 +372,7 @@ func TestCheckClientCompatability(t *testing.T) {
 	}
 	for _, browser := range uaTestParameters {
 		t.Run(browser.Name, func(t *testing.T) {
-			result := CheckClientCompatability(browser.UserAgent)
+			result := CheckClientCompatibility(browser.UserAgent)
 			require.Equalf(t, result, browser.Result, "user agent test failed for %s", browser.Name)
 		})
 	}

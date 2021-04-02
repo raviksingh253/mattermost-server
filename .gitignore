@@ -10,6 +10,7 @@ webapp/yarn-error.log
 mattermost.mattermost-license
 config/mattermost.mattermost-license
 config/config.json
+config/*.crt
 
 web/static/js/bundle*.js
 web/static/js/bundle*.js.map
@@ -108,8 +109,8 @@ webapp/coverage
 /tags
 .idea
 
-debug
-client
+/debug
+/client
 __debug_bin
 report.xml
 go.*.orig

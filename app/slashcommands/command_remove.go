@@ -4,13 +4,13 @@
 package slashcommands
 
 import (
+	"context"
 	"strings"
 
-	goi18n "github.com/mattermost/go-i18n/i18n"
-
 	"github.com/mattermost/mattermost-server/v5/app"
-	"github.com/mattermost/mattermost-server/v5/mlog"
 	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/shared/i18n"
+	"github.com/mattermost/mattermost-server/v5/shared/mlog"
 )
 
 type RemoveProvider struct {
@@ -20,8 +20,8 @@ type KickProvider struct {
 }
 
 const (
-	CMD_REMOVE = "remove"
-	CMD_KICK   = "kick"
+	CmdRemove = "remove"
+	CmdKick   = "kick"
 )
 
 func init() {
@@ -29,17 +29,17 @@ func init() {
 	app.RegisterCommandProvider(&KickProvider{})
 }
 
-func (me *RemoveProvider) GetTrigger() string {
-	return CMD_REMOVE
+func (*RemoveProvider) GetTrigger() string {
+	return CmdRemove
 }
 
-func (me *KickProvider) GetTrigger() string {
-	return CMD_KICK
+func (*KickProvider) GetTrigger() string {
+	return CmdKick
 }
 
-func (me *RemoveProvider) GetCommand(a *app.App, T goi18n.TranslateFunc) *model.Command {
+func (*RemoveProvider) GetCommand(a *app.App, T i18n.TranslateFunc) *model.Command {
 	return &model.Command{
-		Trigger:          CMD_REMOVE,
+		Trigger:          CmdRemove,
 		AutoComplete:     true,
 		AutoCompleteDesc: T("api.command_remove.desc"),
 		AutoCompleteHint: T("api.command_remove.hint"),
@@ -47,9 +47,9 @@ func (me *RemoveProvider) GetCommand(a *app.App, T goi18n.TranslateFunc) *model.
 	}
 }
 
-func (me *KickProvider) GetCommand(a *app.App, T goi18n.TranslateFunc) *model.Command {
+func (*KickProvider) GetCommand(a *app.App, T i18n.TranslateFunc) *model.Command {
 	return &model.Command{
-		Trigger:          CMD_KICK,
+		Trigger:          CmdKick,
 		AutoComplete:     true,
 		AutoCompleteDesc: T("api.command_remove.desc"),
 		AutoCompleteHint: T("api.command_remove.hint"),
@@ -57,11 +57,11 @@ func (me *KickProvider) GetCommand(a *app.App, T goi18n.TranslateFunc) *model.Co
 	}
 }
 
-func (me *RemoveProvider) DoCommand(a *app.App, args *model.CommandArgs, message string) *model.CommandResponse {
+func (*RemoveProvider) DoCommand(a *app.App, args *model.CommandArgs, message string) *model.CommandResponse {
 	return doCommand(a, args, message)
 }
 
-func (me *KickProvider) DoCommand(a *app.App, args *model.CommandArgs, message string) *model.CommandResponse {
+func (*KickProvider) DoCommand(a *app.App, args *model.CommandArgs, message string) *model.CommandResponse {
 	return doCommand(a, args, message)
 }
 
@@ -96,7 +96,7 @@ func doCommand(a *app.App, args *model.CommandArgs, message string) *model.Comma
 		}
 	}
 
-	if len(message) == 0 {
+	if message == "" {
 		return &model.CommandResponse{
 			Text:         args.T("api.command_remove.message.app_error"),
 			ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
@@ -108,9 +108,9 @@ func doCommand(a *app.App, args *model.CommandArgs, message string) *model.Comma
 	targetUsername = strings.SplitN(message, " ", 2)[0]
 	targetUsername = strings.TrimPrefix(targetUsername, "@")
 
-	userProfile, err := a.Srv().Store.User().GetByUsername(targetUsername)
-	if err != nil {
-		mlog.Error(err.Error())
+	userProfile, nErr := a.Srv().Store.User().GetByUsername(targetUsername)
+	if nErr != nil {
+		mlog.Error(nErr.Error())
 		return &model.CommandResponse{
 			Text:         args.T("api.command_remove.missing.app_error"),
 			ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
@@ -123,7 +123,7 @@ func doCommand(a *app.App, args *model.CommandArgs, message string) *model.Comma
 		}
 	}
 
-	_, err = a.GetChannelMember(args.ChannelId, userProfile.Id)
+	_, err = a.GetChannelMember(context.Background(), args.ChannelId, userProfile.Id)
 	if err != nil {
 		nameFormat := *a.Config().TeamSettings.TeammateNameDisplay
 		return &model.CommandResponse{

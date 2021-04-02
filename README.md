@@ -69,4 +69,3 @@ Response:
 ### [Download Build](https://drive.google.com/open?id=14Mnveq-JcHDDnEltgcJCMCJA-OscAmPx)
 
 ## [About Mattermost on Github](https://github.com/mattermost/mattermost-server)
-

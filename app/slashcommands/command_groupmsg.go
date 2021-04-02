@@ -7,30 +7,30 @@ import (
 	"fmt"
 	"strings"
 
-	goi18n "github.com/mattermost/go-i18n/i18n"
 	"github.com/mattermost/mattermost-server/v5/app"
-	"github.com/mattermost/mattermost-server/v5/mlog"
 	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/shared/i18n"
+	"github.com/mattermost/mattermost-server/v5/shared/mlog"
 )
 
 type groupmsgProvider struct {
 }
 
 const (
-	CMD_GROUPMSG = "groupmsg"
+	CmdGroupMsg = "groupmsg"
 )
 
 func init() {
 	app.RegisterCommandProvider(&groupmsgProvider{})
 }
 
-func (me *groupmsgProvider) GetTrigger() string {
-	return CMD_GROUPMSG
+func (*groupmsgProvider) GetTrigger() string {
+	return CmdGroupMsg
 }
 
-func (me *groupmsgProvider) GetCommand(a *app.App, T goi18n.TranslateFunc) *model.Command {
+func (*groupmsgProvider) GetCommand(a *app.App, T i18n.TranslateFunc) *model.Command {
 	return &model.Command{
-		Trigger:          CMD_GROUPMSG,
+		Trigger:          CmdGroupMsg,
 		AutoComplete:     true,
 		AutoCompleteDesc: T("api.command_groupmsg.desc"),
 		AutoCompleteHint: T("api.command_groupmsg.hint"),
@@ -38,7 +38,7 @@ func (me *groupmsgProvider) GetCommand(a *app.App, T goi18n.TranslateFunc) *mode
 	}
 }
 
-func (me *groupmsgProvider) DoCommand(a *app.App, args *model.CommandArgs, message string) *model.CommandResponse {
+func (*groupmsgProvider) DoCommand(a *app.App, args *model.CommandArgs, message string) *model.CommandResponse {
 	targetUsers := map[string]*model.User{}
 	targetUsersSlice := []string{args.UserId}
 	invalidUsernames := []string{}
@@ -48,8 +48,8 @@ func (me *groupmsgProvider) DoCommand(a *app.App, args *model.CommandArgs, messa
 	for _, username := range users {
 		username = strings.TrimSpace(username)
 		username = strings.TrimPrefix(username, "@")
-		targetUser, err := a.Srv().Store.User().GetByUsername(username)
-		if err != nil {
+		targetUser, nErr := a.Srv().Store.User().GetByUsername(username)
+		if nErr != nil {
 			invalidUsernames = append(invalidUsernames, username)
 			continue
 		}
@@ -121,7 +121,7 @@ func (me *groupmsgProvider) DoCommand(a *app.App, args *model.CommandArgs, messa
 		}
 	}
 
-	if len(parsedMessage) > 0 {
+	if parsedMessage != "" {
 		post := &model.Post{}
 		post.Message = parsedMessage
 		post.ChannelId = groupChannel.Id
