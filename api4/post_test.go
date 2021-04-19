@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -540,7 +541,7 @@ func TestCreatePostSendOutOfChannelMentions(t *testing.T) {
 
 	inChannelUser := th.CreateUser()
 	th.LinkUserToTeam(inChannelUser, th.BasicTeam)
-	th.App.AddUserToChannel(inChannelUser, th.BasicChannel)
+	th.App.AddUserToChannel(inChannelUser, th.BasicChannel, false)
 
 	post1 := &model.Post{ChannelId: th.BasicChannel.Id, Message: "@" + inChannelUser.Username}
 	_, resp := Client.CreatePost(post1)
@@ -618,7 +619,7 @@ func TestCreatePostCheckOnlineStatus(t *testing.T) {
 				}
 			case <-timeout:
 				// We just skip the test instead of failing because waiting for more than 5 seconds
-				// to get a response does not make sense, and it will unncessarily slow down
+				// to get a response does not make sense, and it will unnecessarily slow down
 				// the tests further in an already congested CI environment.
 				t.Skip("timed out waiting for event")
 			}
@@ -1997,7 +1998,7 @@ func TestDeletePost(t *testing.T) {
 func TestDeletePostMessage(t *testing.T) {
 	th := Setup(t).InitBasic()
 	th.LinkUserToTeam(th.SystemAdminUser, th.BasicTeam)
-	th.App.AddUserToChannel(th.SystemAdminUser, th.BasicChannel)
+	th.App.AddUserToChannel(th.SystemAdminUser, th.BasicChannel, false)
 
 	defer th.TearDown()
 
@@ -2035,7 +2036,7 @@ func TestDeletePostMessage(t *testing.T) {
 					}
 				case <-timeout:
 					// We just skip the test instead of failing because waiting for more than 5 seconds
-					// to get a response does not make sense, and it will unncessarily slow down
+					// to get a response does not make sense, and it will unnecessarily slow down
 					// the tests further in an already congested CI environment.
 					t.Skip("timed out waiting for event")
 				}
@@ -2312,8 +2313,8 @@ func TestSearchPostsFromUser(t *testing.T) {
 	th.LoginTeamAdmin()
 	user := th.CreateUser()
 	th.LinkUserToTeam(user, th.BasicTeam)
-	th.App.AddUserToChannel(user, th.BasicChannel)
-	th.App.AddUserToChannel(user, th.BasicChannel2)
+	th.App.AddUserToChannel(user, th.BasicChannel, false)
+	th.App.AddUserToChannel(user, th.BasicChannel2, false)
 
 	message := "sgtitlereview with space"
 	_ = th.CreateMessagePost(message)
@@ -2543,4 +2544,31 @@ func TestSetChannelUnread(t *testing.T) {
 		response := th.Client.SetPostUnread(u1.Id, p2.Id)
 		checkHTTPStatus(t, response, http.StatusUnauthorized, true)
 	})
+}
+
+func TestMarkUnreadCausesAutofollow(t *testing.T) {
+	os.Setenv("MM_FEATUREFLAGS_COLLAPSEDTHREADS", "true")
+	defer os.Unsetenv("MM_FEATUREFLAGS_COLLAPSEDTHREADS")
+	th := Setup(t).InitBasic()
+	defer th.TearDown()
+	th.App.UpdateConfig(func(cfg *model.Config) {
+		*cfg.ServiceSettings.ThreadAutoFollow = true
+		*cfg.ServiceSettings.CollapsedThreads = model.COLLAPSED_THREADS_DEFAULT_ON
+	})
+
+	rootPost, appErr := th.App.CreatePost(&model.Post{UserId: th.BasicUser2.Id, CreateAt: model.GetMillis(), ChannelId: th.BasicChannel.Id, Message: "hi"}, th.BasicChannel, false, false)
+	require.Nil(t, appErr)
+	replyPost, appErr := th.App.CreatePost(&model.Post{RootId: rootPost.Id, UserId: th.BasicUser2.Id, CreateAt: model.GetMillis(), ChannelId: th.BasicChannel.Id, Message: "hi"}, th.BasicChannel, false, false)
+	require.Nil(t, appErr)
+	threads, appErr := th.App.GetThreadsForUser(th.BasicUser.Id, th.BasicTeam.Id, model.GetUserThreadsOpts{})
+	require.Nil(t, appErr)
+	require.Zero(t, threads.Total)
+
+	_, appErr = th.App.MarkChannelAsUnreadFromPost(replyPost.Id, th.BasicUser.Id)
+	require.Nil(t, appErr)
+
+	threads, appErr = th.App.GetThreadsForUser(th.BasicUser.Id, th.BasicTeam.Id, model.GetUserThreadsOpts{})
+	require.Nil(t, appErr)
+	require.NotZero(t, threads.Total)
+
 }

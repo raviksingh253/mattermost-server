@@ -378,10 +378,10 @@ func TestCreateUserWebSocketEvent(t *testing.T) {
 		guest, err := th.App.CreateGuest(guest)
 		require.Nil(t, err)
 
-		_, err = th.App.AddUserToTeam(th.BasicTeam.Id, guest.Id, "")
+		_, _, err = th.App.AddUserToTeam(th.BasicTeam.Id, guest.Id, "")
 		require.Nil(t, err)
 
-		_, err = th.App.AddUserToChannel(guest, th.BasicChannel)
+		_, err = th.App.AddUserToChannel(guest, th.BasicChannel, false)
 		require.Nil(t, err)
 
 		guestClient := th.CreateClient()
@@ -3384,7 +3384,7 @@ func TestLoginWithLag(t *testing.T) {
 		defer mainHelper.ToggleReplicasOff()
 
 		cmdErr := mainHelper.SetReplicationLagForTesting(5)
-		require.Nil(t, cmdErr)
+		require.NoError(t, cmdErr)
 		defer mainHelper.SetReplicationLagForTesting(0)
 
 		_, resp := th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
@@ -5151,11 +5151,11 @@ func TestGetKnownUsers(t *testing.T) {
 	th.LinkUserToTeam(u3, t2)
 	th.LinkUserToTeam(u4, t3)
 
-	th.App.AddUserToChannel(u1, c1)
-	th.App.AddUserToChannel(u1, c2)
-	th.App.AddUserToChannel(u2, c1)
-	th.App.AddUserToChannel(u3, c2)
-	th.App.AddUserToChannel(u4, c3)
+	th.App.AddUserToChannel(u1, c1, false)
+	th.App.AddUserToChannel(u1, c2, false)
+	th.App.AddUserToChannel(u2, c1, false)
+	th.App.AddUserToChannel(u3, c2, false)
+	th.App.AddUserToChannel(u4, c3, false)
 
 	t.Run("get know users sharing no channels", func(t *testing.T) {
 		_, _ = th.Client.Login(u4.Email, u4.Password)
@@ -6083,7 +6083,7 @@ func TestSetProfileImageWithProviderAttributes(t *testing.T) {
 	doCleanup := func(t *testing.T, th *TestHelper, user *model.User) {
 		info := &model.FileInfo{Path: "users/" + user.Id + "/profile.png"}
 		err = th.cleanupTestFile(info)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	t.Run("LDAP user", func(t *testing.T) {
